@@ -4,8 +4,12 @@ import random
 
 
 # Setup up screen
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 1200, 800
 FPS = 60
+
+# Canal Borders (Y coordinates)
+CANAL_TOP = 150
+CANAL_BOTTOM = 650
 
 # Colors
 WHITE = (255, 255, 255)
@@ -17,8 +21,9 @@ YELLOW = (255, 255, 0, 100) # The fourth value is for transparency (requires spe
 class Waste:
     def __init__(self):
         # Generate waste at a random position on the screen
+        # Ensure waste only appears inside the canal boundaries
         self.x = random.randint(50, WIDTH - 50)
-        self.y = random.randint(50, HEIGHT - 50)
+        self.y = random.randint(CANAL_TOP + 20, CANAL_BOTTOM - 20)
         self.radius = 6
         self.collected = False
 
@@ -94,13 +99,36 @@ class USVRobot:
 
         return detected_list
 
+    def update(self, width, height):
+        """
+        Update robot position and handle canal boundary logic.
+        """
+        # Constant speed (0.5 units per frame for now)
+        # In a real scenario, this would be adjusted by delta time (dt)
+        linear_speed = 1.5
+
+        # Calculate new potential position
+        new_x = self.x + linear_speed * np.cos(self.theta)
+        new_y = self.y + linear_speed * np.sin(self.theta)
+
+        # Boundary logic for the canal
+        # Margin for X (left/right screen edges) and CANAL limits for Y
+        margin_x = 30
+        if new_x < margin_x or new_x > WIDTH - margin_x or \
+           new_y < CANAL_TOP + 10 or new_y > CANAL_BOTTOM - 10:
+            # Rotate when hitting the canal walls or ends
+            self.theta += 0.05
+        else:
+            self.x = new_x
+            self.y = new_y
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption(" USV Birmingham simulation - Phase 1")
     clock = pygame.time.Clock()
 
-    robot = USVRobot(WIDTH//2, HEIGHT//2)
+    robot = USVRobot(100, 400)
 
     # Create 10 pieces of waste
     wastes = [Waste() for _ in range(10)]
@@ -108,27 +136,41 @@ def main():
     running = True
     while running:
         screen.fill(WHITE)
+        # Draw water background (Light Blue)
+        pygame.draw.rect(screen, (230, 245, 255), (0, CANAL_TOP, WIDTH, CANAL_BOTTOM - CANAL_TOP))
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
         # For now, let's make the robot rotate slowly to test the FOV
-        robot.theta += 0.01
+        # robot.theta += 0.01
 
-        detected = robot.detect_waste(wastes)
+        # Draw Canal Walls (Visual boundaries)
+        # Line from (0, CANAL_TOP) to (WIDTH, CANAL_TOP)
+        pygame.draw.line(screen, (50, 50, 50), (0, CANAL_TOP), (WIDTH, CANAL_TOP), 5)
+        # Line from (0, CANAL_BOTTOM) to (WIDTH, CANAL_BOTTOM)
+        pygame.draw.line(screen, (50, 50, 50), (0, CANAL_BOTTOM), (WIDTH, CANAL_BOTTOM), 5)
 
-        # DRAWING SECTION
+
+        # 1. Update robot physics/movement
+        robot.update(WIDTH, HEIGHT)
+
+        # 2. DRAWING waste SECTION
         for w in wastes:
             w.draw(screen)
 
-        # Visual feedback for detection
+        # 3. Sensor logic (Vision)
+        detected = robot.detect_waste(wastes)
+
+        # 4. Visual feedback for detection (green lines)
         for d in detected:
             # Draw a line to detected waste to confirm the logic works
             pygame.draw.line(screen, (0, 255, 0), (robot.x, robot.y), (d.x, d.y), 2)
             # Draw a bigger indicator on top of the robot
             pygame.draw.circle(screen, (0, 255, 0), (int(robot.x), int(robot.y)), 10)
 
+        # 5. Draw robot on top
         robot.draw(screen)
 
         pygame.display.flip()
